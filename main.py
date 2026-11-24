@@ -22,6 +22,7 @@ school play, 0.90 over the dance, 0.75 over the letter-versus-call,
 the first two games (0.90 over the truck).
 """
 
+import hashlib
 import os
 
 LINE_1 = "Don't send that text at 2 a.m. from the kitchen floor \u2014 wait until morning, when you can read it sober."
@@ -29,6 +30,11 @@ LINE_2 = "The three words you almost send would end a friendship that, five year
 
 OUTPUT_PATH = "/output/entry.txt"
 MAX_CHARS = 280
+
+# Pinned digest of the exact bytes this program must write: the 220-char
+# two-line warning encoded as UTF-8 (222 bytes — the em dash is 3 bytes).
+EXPECTED_SHA256 = "864f2e4d66bc2b945abc68c8a2d2a0cc129ca1b7a06bce7750fd2644c128c3a7"
+EXPECTED_BYTES = 222
 
 
 def build_text() -> str:
@@ -49,13 +55,24 @@ def main() -> None:
     with open(OUTPUT_PATH, "w", encoding="utf-8", newline="") as f:
         f.write(text)
     # Post-write read-back gate: verify what actually landed on disk
-    # matches the expected text, byte for byte, inside the 1-280 gate.
-    with open(OUTPUT_PATH, "r", encoding="utf-8", newline="") as f:
-        written = f.read()
-    if written != text:
+    # matches the expected text, byte for byte — exact bytes, exact
+    # length (222), and the pinned sha256 digest — inside the 1-280 gate.
+    with open(OUTPUT_PATH, "rb") as f:
+        raw = f.read()
+    if raw != text.encode("utf-8"):
         raise SystemExit("read-back mismatch: output differs from expected text")
-    if not 1 <= len(written) <= MAX_CHARS:
-        raise SystemExit(f"read-back length {len(written)} outside the 1-{MAX_CHARS} gate")
+    if len(raw) != EXPECTED_BYTES:
+        raise SystemExit(
+            f"read-back length: found {len(raw)} bytes, expected {EXPECTED_BYTES}"
+        )
+    digest = hashlib.sha256(raw).hexdigest()
+    if digest != EXPECTED_SHA256:
+        raise SystemExit(
+            f"read-back sha256: found {digest}, expected {EXPECTED_SHA256}"
+        )
+    if not 1 <= len(raw) <= MAX_CHARS:
+        raise SystemExit(f"read-back length {len(raw)} outside the 1-{MAX_CHARS} gate")
+    print(f"verified: {len(text)} chars, sha256 {digest}")
 
 
 if __name__ == "__main__":
